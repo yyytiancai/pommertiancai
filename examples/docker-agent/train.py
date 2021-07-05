@@ -5,14 +5,14 @@ from itertools import count
 
 import numpy as np
 import torch
+import torch.nn as nn
 import torch.nn.functional as F
 from torch import nn, optim
-from torch.utils.tensorboard import SummaryWriter
 
 import pommerman
 from pommerman import agents
 
-writer = SummaryWriter("./log_2/")
+from pommerman.runner import DockerAgentRunner
 global_step = 0
 
 os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
@@ -21,6 +21,34 @@ Transition = namedtuple('Transition',
                         ('state', 'action', 'next_state', 'reward'))
 reward_list = []
 
+
+
+class Residual_Block (nn.Module):
+    def __init__(self,i_channel,o_channel,stride=1,downsample=None):
+        super(Residual_Block,self).__init__()
+        self.conv1=nn.Conv2d(in_channels=i_channel,out_channels=o_channel,kernel_size=3,stride=stride,padding=1,bias=False)
+        self.bn1=nn.BatchNorm2d(o_channel)
+        self.relu=nn.ReLU(inplace=True)
+        
+        self.conv2=nn.Conv2d(in_channels=o_channel,out_channels=o_channel,kernel_size=3,stride=1,padding=1,bias=False)
+        self.bn2=nn.BatchNorm2d(o_channel)
+        self.downsample=downsample
+        
+    def forward(self,x):
+        residual=x
+        
+        out=self.conv1(x)
+        out=self.bn1(out)
+        out=self.relu(out)
+        out=self.conv2(out)
+        out=self.bn2(out)
+        
+        if self.downsample:
+            residual=self.downsample(x)
+        
+        out+=residual
+        out=self.relu(out)
+        return out
 
 class ReplayMemory(object):
 
@@ -49,9 +77,11 @@ class Net(nn.Module):
         super(Net, self).__init__()
         self.nseq1 = nn.Sequential(
             nn.Conv2d(4, 16, kernel_size=3),
+            Residual_Block(16,16),
             nn.BatchNorm2d(16),
             nn.ReLU(),
             nn.Conv2d(16, 32, kernel_size=5),
+            Residual_Block(32, 32),
             nn.BatchNorm2d(32),
             nn.ReLU(),
             nn.Conv2d(32, 64, kernel_size=3),
@@ -59,9 +89,13 @@ class Net(nn.Module):
             nn.ReLU(),
         )
         self.nseq2 = nn.Sequential(
-            nn.Linear(1740, 512),
+            nn.Linear(1740, 1024),
             nn.ReLU(),
-            nn.Linear(512, 256),
+            nn.Linear(1024, 512),
+            nn.ReLU(),
+            nn.Linear(512, 128*3),
+            nn.ReLU(),
+            nn.Linear(128*3, 256),
             nn.ReLU(),
             nn.Linear(256, 32),
             nn.ReLU(),
@@ -100,12 +134,12 @@ class DQN(nn.Module):
         self.gamma = 0.999
         self.obs_width = 11
         self.lr = 0.001
-        self.batch_size = 256
+        self.batch_size = 32
 
         self.policy_net = Net().to(self.device)
         self.target_net = Net().to(self.device)
         if os.path.exists("model_2.pth"):
-            self.policy_net.load_state_dict(torch.load("model_2.pth"))
+            self.policy_net.load_state_dict(torch.load("model_2.pth", map_location="cpu"))
         self.target_net.load_state_dict(self.policy_net.state_dict())
         self.target_net.eval()
 
@@ -152,7 +186,7 @@ class DQN(nn.Module):
         self.optimizer.step()
 
 
-class DQNAgent(agents.BaseAgent):
+class DQNAgent(DockerAgentRunner):
     def __init__(self, model):
         super(DQNAgent, self).__init__()
         self.model = model
@@ -200,7 +234,7 @@ class DQNAgent(agents.BaseAgent):
         self.obs_fps.append(obs)
         obs = torch.cat(self.obs_fps[-4:])
         sample = random.random()
-        if sample > 1000.0 / (global_step + 0.1):
+        if sample > 0.02:
             re_action = self.model.policy_net(obs).argmax().item()
             return re_action
         else:
@@ -266,6 +300,6 @@ if __name__ == "__main__":
         if i_episode % 10 == 0:
             print("第{}次-第{}次正在训练".format(i_episode + 1, i_episode + 10))
             a.model.target_net.load_state_dict(a.model.policy_net.state_dict())
-            torch.save(a.model.target_net.state_dict(), "model_2.pth")
+            torch.save(a.model.target_net.state_dict(), "model.pth")
 
     print('Complete')

@@ -6,7 +6,7 @@ from torch.nn import functional as F
 
 from pommerman import agents
 from pommerman.runner import DockerAgentRunner
-
+from train import *
 import random
 
 class Net(nn.Module):
@@ -117,7 +117,7 @@ class MyAgent(DockerAgentRunner):
 
 def main():
     '''Inits and runs a Docker Agent'''
-    agent = MyAgent()
+    agent = DQNAgent(DQN())
     agent.run()
 
 

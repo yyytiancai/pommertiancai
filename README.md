@@ -31,4 +31,3 @@
 
     您可以通过修改和输出examples/simple_ffa_run.py中的参数测试您的算法性能。
 
-# pommertiancai
