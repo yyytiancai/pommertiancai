@@ -234,7 +234,7 @@ class DQNAgent(DockerAgentRunner):
         self.obs_fps.append(obs)
         obs = torch.cat(self.obs_fps[-4:])
         sample = random.random()
-        if sample > 0.02:
+        if sample > 0.5:
             re_action = self.model.policy_net(obs).argmax().item()
             return re_action
         else:
