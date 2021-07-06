@@ -22,7 +22,7 @@ Transition = namedtuple('Transition',
 reward_list = []
 
 
-
+# 增加一个残差网络
 class Residual_Block (nn.Module):
     def __init__(self,i_channel,o_channel,stride=1,downsample=None):
         super(Residual_Block,self).__init__()
@@ -77,6 +77,7 @@ class Net(nn.Module):
         super(Net, self).__init__()
         self.nseq1 = nn.Sequential(
             nn.Conv2d(4, 16, kernel_size=3),
+            # 加入残差网络
             Residual_Block(16,16),
             nn.BatchNorm2d(16),
             nn.ReLU(),
@@ -234,7 +235,7 @@ class DQNAgent(DockerAgentRunner):
         self.obs_fps.append(obs)
         obs = torch.cat(self.obs_fps[-4:])
         sample = random.random()
-        if sample > 0.8:
+        if sample > 0.9:
             re_action = self.model.policy_net(obs).argmax().item()
             return re_action
         else:
